@@ -51,12 +51,13 @@
 
     <script src="//unpkg.com/three-globe" defer></script>
     <script src="//unpkg.com/satellite.js/dist/satellite.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script> <!-- Include Axios -->
 </head>
 
 <body>
     <div id="side-panel">
         <h2>Satellite Information</h2>
-        <div id="satellite-info">Hover over a satellite to see details here.</div>
+        <div id="satellite-info">Click on a satellite to see details here.</div>
     </div>
     <div id="globe-container">
         <div id="globeViz"></div>
@@ -91,39 +92,42 @@
             return satMesh;
         });
 
-        fetch('./satellite.txt').then(r => r.text()).then(rawData => {
-            const tleData = rawData.replace(/\r/g, '').split(/\n(?=[^12])/).map(tle => tle.split('\n'));
-            const satData = tleData.map(([name, ...tle]) => ({
-                satrec: satellite.twoline2satrec(...tle),
-                name: name.trim().replace(/^0 /, '')
-            }));
+        axios.get('./satellite.txt')
+            .then(response => {
+                const rawData = response.data;
+                const tleData = rawData.replace(/\r/g, '').split(/\n(?=[^12])/).map(tle => tle.split('\n'));
+                const satData = tleData.map(([name, ...tle]) => ({
+                    satrec: satellite.twoline2satrec(...tle),
+                    name: name.trim().replace(/^0 /, '')
+                }));
 
-            let time = new Date();
-            
-            // Single frame update
-            time = new Date(+time + TIME_STEP);
-            timeLogger.innerText = time.toString();
+                let time = new Date();
+                
+                // Single frame update
+                time = new Date(+time + TIME_STEP);
+                timeLogger.innerText = time.toString();
 
-            // Update satellite positions
-            const gmst = satellite.gstime(time);
-            satData.forEach(d => {
-                const eci = satellite.propagate(d.satrec, time);
-                if (eci.position) {
-                    const gdPos = satellite.eciToGeodetic(eci.position, gmst);
-                    d.lat = satellite.radiansToDegrees(gdPos.latitude);
-                    d.lng = satellite.radiansToDegrees(gdPos.longitude);
-                    d.alt = gdPos.height / EARTH_RADIUS_KM;
+                // Update satellite positions
+                const gmst = satellite.gstime(time);
+                satData.forEach(d => {
+                    const eci = satellite.propagate(d.satrec, time);
+                    if (eci.position) {
+                        const gdPos = satellite.eciToGeodetic(eci.position, gmst);
+                        d.lat = satellite.radiansToDegrees(gdPos.latitude);
+                        d.lng = satellite.radiansToDegrees(gdPos.longitude);
+                        d.alt = gdPos.height / EARTH_RADIUS_KM;
 
-                    d.position = new THREE.Vector3(
-                        (EARTH_RADIUS_KM + d.alt) * Math.cos(d.lat * Math.PI / 180) * Math.cos(d.lng * Math.PI / 180),
-                        (EARTH_RADIUS_KM + d.alt) * Math.sin(d.lat * Math.PI / 180),
-                        (EARTH_RADIUS_KM + d.alt) * Math.cos(d.lat * Math.PI / 180) * Math.sin(d.lng * Math.PI / 180)
-                    );
-                }
-            });
+                        d.position = new THREE.Vector3(
+                            (EARTH_RADIUS_KM + d.alt) * Math.cos(d.lat * Math.PI / 180) * Math.cos(d.lng * Math.PI / 180),
+                            (EARTH_RADIUS_KM + d.alt) * Math.sin(d.lat * Math.PI / 180),
+                            (EARTH_RADIUS_KM + d.alt) * Math.cos(d.lat * Math.PI / 180) * Math.sin(d.lng * Math.PI / 180)
+                        );
+                    }
+                });
 
-            Globe.objectsData(satData);
-        });
+                Globe.objectsData(satData);
+            })
+            .catch(error => console.error('Error loading satellite data:', error));
 
         // Setup renderer
         const renderer = new THREE.WebGLRenderer();
@@ -147,7 +151,7 @@
         tbControls.minDistance = 101;
         tbControls.zoomSpeed = 1;
 
-        // Raycaster for detecting mouse over objects
+        // Raycaster for detecting mouse over and click objects
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
 
@@ -166,18 +170,55 @@
 
                 if (satData) {
                     tooltip.style.display = 'block';
-                    tooltip.style.left = `${event.clientX + 10}px`;
+                    tooltip.style.left = `${event.clientX/1.5 + 10}px`;
                     tooltip.style.top = `${event.clientY + 10}px`;
                     tooltip.innerHTML = `Satellite: ${satData.name}<br>Latitude: ${satData.lat.toFixed(2)}<br>Longitude: ${satData.lng.toFixed(2)}`;
-
-                    satelliteInfo.innerHTML = `Satellite: ${satData.name}<br>Latitude: ${satData.lat.toFixed(2)}<br>Longitude: ${satData.lng.toFixed(2)}`;
                 }
             } else {
                 tooltip.style.display = 'none';
-                // satelliteInfo.innerHTML = 'Hover over a satellite to see details here.';
             }
         }
+
+        function onClick(event) {
+            // Update the mouse variable
+            mouse.x = ((event.clientX - 250) / (window.innerWidth - 250)) * 2 - 1; // Adjust for side panel width
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            // Calculate objects intersecting the picking ray
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(Globe.children);
+
+            if (intersects.length > 0) {
+                const intersectedObject = intersects[0].object;
+                const satData = intersectedObject.userData.satData; // Retrieve satellite data from userData
+
+                if (satData) {
+                    axios.post('http://127.0.0.1:5000', { satellite_name: satData.name }, {
+                        headers: { 'Content-Type': 'application/json' }
+                    })
+                    .then(response => {
+                        const data = JSON.parse(response.data);
+                        console.log(data);
+                        console.log(data.origin)
+                        satelliteInfo.innerHTML = `Satellite: ${satData.name}<br><br>
+                        Country of Origin: ${data.origin}<br><br>
+                        Cost: ${data["cost"]}<br><br>
+                        Launch Date: ${data["launch_date"]}<br><br>
+                        Purpose: ${data["purpose"]}<br><br>
+                        History: ${data["history"]}<br><br>
+                        `;
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                    });
+                }
+            } else {
+                satelliteInfo.innerHTML = 'Click on a satellite to see details here.';
+            }
+        }
+
         window.addEventListener('mousemove', onMouseMove, false);
+        window.addEventListener('click', onClick, false);
 
         // Kick-off renderer
         (function animate() {
