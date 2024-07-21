@@ -42,6 +42,17 @@
         .lead-text {
             font-weight: bold;
         }
+        #toggle-button {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 10px;
+            background-color: #444;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
     </style>
     
     <script type="importmap">{ "imports": {
@@ -68,6 +79,7 @@
         <div id="globeViz"></div>
         <div id="time-log"></div>
         <div id="tooltip"></div>
+        <button id="toggle-button">Start/Stop Satellites</button>
     </div>
 
     <script type="module">
@@ -75,7 +87,7 @@
 
         const EARTH_RADIUS_KM = 6371; // km
         const SAT_SIZE = 80; // km
-        const TIME_STEP = 5 * 1000; // per frame
+        let TIME_STEP = 1 * 1000; // per frame
 
         const timeLogger = document.getElementById('time-log');
         const tooltip = document.getElementById('tooltip');
@@ -109,28 +121,47 @@
                 let time = new Date();
                 
                 // Single frame update
-                time = new Date(+time + TIME_STEP);
-                timeLogger.innerText = time.toString();
+                function updateSatellites() {
+                    time = new Date(+time + TIME_STEP);
+                    timeLogger.innerText = time.toString();
 
-                // Update satellite positions
-                const gmst = satellite.gstime(time);
-                satData.forEach(d => {
-                    const eci = satellite.propagate(d.satrec, time);
-                    if (eci.position) {
-                        const gdPos = satellite.eciToGeodetic(eci.position, gmst);
-                        d.lat = satellite.radiansToDegrees(gdPos.latitude);
-                        d.lng = satellite.radiansToDegrees(gdPos.longitude);
-                        d.alt = gdPos.height / EARTH_RADIUS_KM;
+                    const gmst = satellite.gstime(time);
+                    satData.forEach(d => {
+                        const eci = satellite.propagate(d.satrec, time);
+                        if (eci.position) {
+                            const gdPos = satellite.eciToGeodetic(eci.position, gmst);
+                            d.lat = satellite.radiansToDegrees(gdPos.latitude);
+                            d.lng = satellite.radiansToDegrees(gdPos.longitude);
+                            d.alt = gdPos.height / EARTH_RADIUS_KM;
 
-                        d.position = new THREE.Vector3(
-                            (EARTH_RADIUS_KM + d.alt) * Math.cos(d.lat * Math.PI / 180) * Math.cos(d.lng * Math.PI / 180),
-                            (EARTH_RADIUS_KM + d.alt) * Math.sin(d.lat * Math.PI / 180),
-                            (EARTH_RADIUS_KM + d.alt) * Math.cos(d.lat * Math.PI / 180) * Math.sin(d.lng * Math.PI / 180)
-                        );
+                            d.position = new THREE.Vector3(
+                                (EARTH_RADIUS_KM + d.alt) * Math.cos(d.lat * Math.PI / 180) * Math.cos(d.lng * Math.PI / 180),
+                                (EARTH_RADIUS_KM + d.alt) * Math.sin(d.lat * Math.PI / 180),
+                                (EARTH_RADIUS_KM + d.alt) * Math.cos(d.lat * Math.PI / 180) * Math.sin(d.lng * Math.PI / 180)
+                            );
+                        }
+                    });
+
+                    Globe.objectsData(satData);
+                }
+
+                // Call updateSatellites every TIME_STEP milliseconds
+                let intervalId = setInterval(updateSatellites, TIME_STEP);
+                
+                // Button to start/stop satellite movement
+                const toggleButton = document.getElementById('toggle-button');
+                let satellitesMoving = true;
+                
+                toggleButton.addEventListener('click', () => {
+                    console.log('Toggling satellites');
+                    satellitesMoving = !satellitesMoving;
+                    if (satellitesMoving) {
+                        intervalId = setInterval(updateSatellites, TIME_STEP);
+                    } else {
+                        clearInterval(intervalId);
                     }
                 });
 
-                Globe.objectsData(satData);
             })
             .catch(error => console.error('Error loading satellite data:', error));
 
