@@ -2,10 +2,11 @@
 <html lang="en">
 <head>
     <style>
-        body { margin: 0; display: flex; }
+        body { margin: 0; display: flex; font-family: 'Poppins', sans-serif;}
 
         #side-panel {
             width: 250px;
+            padding: 1rem;
             background-color: #333;
             color: white;
             padding: 10px;
@@ -38,8 +39,11 @@
             pointer-events: none;
             display: none;
         }
+        .lead-text {
+            font-weight: bold;
+        }
     </style>
-
+    
     <script type="importmap">{ "imports": {
         "three": "//unpkg.com/three/build/three.module.js",
         "three/addons/": "//unpkg.com/three/examples/jsm/"
@@ -49,6 +53,7 @@
         window.THREE = THREE;
     </script>
 
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins&display=swap">
     <script src="//unpkg.com/three-globe" defer></script>
     <script src="//unpkg.com/satellite.js/dist/satellite.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script> <!-- Include Axios -->
@@ -57,7 +62,7 @@
 <body>
     <div id="side-panel">
         <h2>Satellite Information</h2>
-        <div id="satellite-info">Click on a satellite to see details here.</div>
+        <div id="satellite-info" class="satellite-info">Click on a satellite to see details here.</div>
     </div>
     <div id="globe-container">
         <div id="globeViz"></div>
@@ -144,7 +149,7 @@
         const camera = new THREE.PerspectiveCamera();
         camera.aspect = (window.innerWidth - 250) / window.innerHeight; // Adjust for side panel width
         camera.updateProjectionMatrix();
-        camera.position.z = 200;
+        camera.position.z = 400;
 
         // Add camera controls
         const tbControls = new TrackballControls(camera, renderer.domElement);
@@ -200,16 +205,17 @@
                         const data = JSON.parse(response.data);
                         console.log(data);
                         console.log(data.origin)
-                        satelliteInfo.innerHTML = `Satellite: ${satData.name}<br><br>
-                        Country of Origin: ${data.origin}<br><br>
-                        Cost: ${data["cost"]}<br><br>
-                        Launch Date: ${data["launch_date"]}<br><br>
-                        Purpose: ${data["purpose"]}<br><br>
-                        History: ${data["history"]}<br><br>
+                        satelliteInfo.innerHTML = `<span class="lead-text">Satellite</span>: ${satData.name}<br><br>
+                        <span class="lead-text">Country of Origin</span>: ${data.origin}<br><br>
+                        <span class="lead-text">Cost</span>: ${data["cost"]}<br><br>
+                        <span class="lead-text">Launch Date</span>: ${data["launch_date"]}<br><br>
+                        <span class="lead-text">Purpose</span>: ${data["purpose"]}<br><br>
+                        <span class="lead-text">History</span>: ${data["history"]}<br><br>
                         `;
                     })
                     .catch(error => {
                         console.error('Error:', error);
+                        satelliteInfo.innerHTML = 'Sorry, could not get the satellite info';
                     });
                 }
             } else {

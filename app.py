@@ -17,11 +17,11 @@ new_template = '''
 You are a satellite guide aimed to provide info about satellites. 
         I will give you the name of a satellite. 
         Please give info about the satellite in the following
-        json format :{{ origin: [country of origin], launch_date: [launch date of the satellite], 
-        purpose: [purpose of the satellite], 
-        weight: [weight of the satellite], 
-        cost: [cost of the satellite],
-        history: [history of the satellite] }}.
+        json format :{{ "origin": [country of origin], "launch_date": [launch date of the satellite], 
+        "purpose": [purpose of the satellite], 
+        "weight": [weight of the satellite], 
+        "cost": [cost of the satellite],
+        "history": [history of the satellite] }}.
         Also, please don't say any other words besides the json info. 
         Thank you, and here is the satellite name: {satellite_name}
 '''
