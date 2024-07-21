@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <style>
+        body { margin: 0; display: flex; }
+
+        #side-panel {
+            width: 250px;
+            background-color: #333;
+            color: white;
+            padding: 10px;
+            overflow-y: auto;
+        }
+
+        #globe-container {
+            flex-grow: 1;
+            position: relative;
+        }
+
+        #time-log {
+            position: absolute;
+            font-size: 12px;
+            font-family: sans-serif;
+            padding: 5px;
+            border-radius: 3px;
+            background-color: rgba(200, 200, 200, 0.1);
+            color: lavender;
+            bottom: 10px;
+            right: 10px;
+        }
+
+        #tooltip {
+            position: absolute;
+            padding: 5px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            border-radius: 3px;
+            pointer-events: none;
+            display: none;
+        }
+    </style>
+
+    <script type="importmap">{ "imports": {
+        "three": "//unpkg.com/three/build/three.module.js",
+        "three/addons/": "//unpkg.com/three/examples/jsm/"
+    }}</script>
+    <script type="module">
+        import * as THREE from 'three';
+        window.THREE = THREE;
+    </script>
+
+    <script src="//unpkg.com/three-globe" defer></script>
+    <script src="//unpkg.com/satellite.js/dist/satellite.min.js"></script>
+</head>
+
+<body>
+    <div id="side-panel">
+        <h2>Satellite Information</h2>
+        <div id="satellite-info">Hover over a satellite to see details here.</div>
+    </div>
+    <div id="globe-container">
+        <div id="globeViz"></div>
+        <div id="time-log"></div>
+        <div id="tooltip"></div>
+    </div>
+
+    <script type="module">
+        import { TrackballControls } from 'three/addons/controls/TrackballControls.js';
+
+        const EARTH_RADIUS_KM = 6371; // km
+        const SAT_SIZE = 80; // km
+        const TIME_STEP = 5 * 1000; // per frame
+
+        const timeLogger = document.getElementById('time-log');
+        const tooltip = document.getElementById('tooltip');
+        const satelliteInfo = document.getElementById('satellite-info');
+
+        const Globe = new ThreeGlobe()
+            .globeImageUrl('//unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
+            .objectLat('lat')
+            .objectLng('lng')
+            .objectAltitude('alt')
+            .objectFacesSurface(false);
+
+        const satGeometry = new THREE.OctahedronGeometry(SAT_SIZE * Globe.getGlobeRadius() / EARTH_RADIUS_KM / 2, 0);
+        const satMaterial = new THREE.MeshLambertMaterial({ color: 'palegreen', transparent: true, opacity: 1 });
+
+        Globe.objectThreeObject((d) => {
+            const satMesh = new THREE.Mesh(satGeometry, satMaterial);
+            satMesh.userData = { satData: d }; // Assign satellite data to userData
+            return satMesh;
+        });
+
+        fetch('./satellite.txt').then(r => r.text()).then(rawData => {
+            const tleData = rawData.replace(/\r/g, '').split(/\n(?=[^12])/).map(tle => tle.split('\n'));
+            const satData = tleData.map(([name, ...tle]) => ({
+                satrec: satellite.twoline2satrec(...tle),
+                name: name.trim().replace(/^0 /, '')
+            }));
+
+            let time = new Date();
+            
+            // Single frame update
+            time = new Date(+time + TIME_STEP);
+            timeLogger.innerText = time.toString();
+
+            // Update satellite positions
+            const gmst = satellite.gstime(time);
+            satData.forEach(d => {
+                const eci = satellite.propagate(d.satrec, time);
+                if (eci.position) {
+                    const gdPos = satellite.eciToGeodetic(eci.position, gmst);
+                    d.lat = satellite.radiansToDegrees(gdPos.latitude);
+                    d.lng = satellite.radiansToDegrees(gdPos.longitude);
+                    d.alt = gdPos.height / EARTH_RADIUS_KM;
+
+                    d.position = new THREE.Vector3(
+                        (EARTH_RADIUS_KM + d.alt) * Math.cos(d.lat * Math.PI / 180) * Math.cos(d.lng * Math.PI / 180),
+                        (EARTH_RADIUS_KM + d.alt) * Math.sin(d.lat * Math.PI / 180),
+                        (EARTH_RADIUS_KM + d.alt) * Math.cos(d.lat * Math.PI / 180) * Math.sin(d.lng * Math.PI / 180)
+                    );
+                }
+            });
+
+            Globe.objectsData(satData);
+        });
+
+        // Setup renderer
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth - 250, window.innerHeight); // Adjust for side panel width
+        document.getElementById('globeViz').appendChild(renderer.domElement);
+
+        // Setup scene
+        const scene = new THREE.Scene();
+        scene.add(Globe);
+        scene.add(new THREE.AmbientLight(0xcccccc, Math.PI));
+        scene.add(new THREE.DirectionalLight(0xffffff, 0.6 * Math.PI));
+
+        // Setup camera
+        const camera = new THREE.PerspectiveCamera();
+        camera.aspect = (window.innerWidth - 250) / window.innerHeight; // Adjust for side panel width
+        camera.updateProjectionMatrix();
+        camera.position.z = 200;
+
+        // Add camera controls
+        const tbControls = new TrackballControls(camera, renderer.domElement);
+        tbControls.minDistance = 101;
+        tbControls.zoomSpeed = 1;
+
+        // Raycaster for detecting mouse over objects
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        function onMouseMove(event) {
+            // Update the mouse variable
+            mouse.x = ((event.clientX - 250) / (window.innerWidth - 250)) * 2 - 1; // Adjust for side panel width
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            // Calculate objects intersecting the picking ray
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(Globe.children);
+
+            if (intersects.length > 0) {
+                const intersectedObject = intersects[0].object;
+                const satData = intersectedObject.userData.satData; // Retrieve satellite data from userData
+
+                if (satData) {
+                    tooltip.style.display = 'block';
+                    tooltip.style.left = `${event.clientX + 10}px`;
+                    tooltip.style.top = `${event.clientY + 10}px`;
+                    tooltip.innerHTML = `Satellite: ${satData.name}<br>Latitude: ${satData.lat.toFixed(2)}<br>Longitude: ${satData.lng.toFixed(2)}`;
+
+                    satelliteInfo.innerHTML = `Satellite: ${satData.name}<br>Latitude: ${satData.lat.toFixed(2)}<br>Longitude: ${satData.lng.toFixed(2)}`;
+                }
+            } else {
+                tooltip.style.display = 'none';
+                // satelliteInfo.innerHTML = 'Hover over a satellite to see details here.';
+            }
+        }
+        window.addEventListener('mousemove', onMouseMove, false);
+
+        // Kick-off renderer
+        (function animate() {
+            // Frame cycle
+            tbControls.update();
+            renderer.render(scene, camera);
+            requestAnimationFrame(animate);
+        })();
+    </script>
+</body>
+</html>
