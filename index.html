@@ -3,21 +3,19 @@
 <head>
     <style>
         body { margin: 0; display: flex; font-family: 'Poppins', sans-serif;}
-
         #side-panel {
-            width: 250px;
+            width: 300px;
             padding: 1rem;
             background-color: #333;
             color: white;
             padding: 10px;
-            overflow-y: auto;
+            max-height: 97vh;
+            overflow-y: scroll;
         }
-
         #globe-container {
             flex-grow: 1;
             position: relative;
         }
-
         #time-log {
             position: absolute;
             font-size: 12px;
@@ -29,7 +27,6 @@
             bottom: 10px;
             right: 10px;
         }
-
         #tooltip {
             position: absolute;
             padding: 5px;
@@ -42,10 +39,8 @@
         .lead-text {
             font-weight: bold;
         }
-        #toggle-button {
+        #toggle-button, #toggle-general, #toggle-navigation, #toggle-communication {
             position: absolute;
-            top: 10px;
-            left: 10px;
             padding: 10px;
             background-color: #444;
             color: white;
@@ -53,8 +48,24 @@
             border-radius: 3px;
             cursor: pointer;
         }
+        #toggle-button {
+            top: 10px;
+            left: 10px;
+        }
+        #toggle-general {
+            top: 10px;
+            left: 200px;
+        }
+        #toggle-navigation {
+            top: 10px;
+            left: 400px;
+        }
+        #toggle-communication {
+            top: 10px;
+            left: 600px;
+        }
     </style>
-    
+
     <script type="importmap">{ "imports": {
         "three": "//unpkg.com/three/build/three.module.js",
         "three/addons/": "//unpkg.com/three/examples/jsm/"
@@ -79,12 +90,26 @@
         <div id="globeViz"></div>
         <div id="time-log"></div>
         <div id="tooltip"></div>
-        <button id="toggle-button">Start/Stop Satellites</button>
+        <div class="navigation">
+            <button id="toggle-button">Start/Stop Satellites</button>
+            <button id="toggle-general">General Satellites</button>
+            <button id="toggle-navigation">Navigation Satellites</button>
+            <button id="toggle-communication">Communication Satellites</button>
+        </div>
     </div>
 
     <script type="module">
         import { TrackballControls } from 'three/addons/controls/TrackballControls.js';
 
+        const countryColors = {
+            "USA": 0xffffff,
+            "Russia": 0xffd166,
+            "China": 0x2ca02c,
+            "India": 0xd62728,
+            "Japan": 0x9467bd,
+            "Unknown": 0x80ed99
+            // Add more countries and colors as needed
+        };
         const EARTH_RADIUS_KM = 6371; // km
         const SAT_SIZE = 80; // km
         let TIME_STEP = 1 * 1000; // per frame
@@ -101,73 +126,117 @@
             .objectFacesSurface(false);
 
         const satGeometry = new THREE.OctahedronGeometry(SAT_SIZE * Globe.getGlobeRadius() / EARTH_RADIUS_KM / 2, 0);
-        const satMaterial = new THREE.MeshLambertMaterial({ color: 'palegreen', transparent: true, opacity: 1 });
-
+        
         Globe.objectThreeObject((d) => {
+            const color = countryColors[d.country] || 0xffffff;
+            const satMaterial = new THREE.MeshLambertMaterial({ color: color, transparent: true, opacity: 1 });
             const satMesh = new THREE.Mesh(satGeometry, satMaterial);
             satMesh.userData = { satData: d }; // Assign satellite data to userData
             return satMesh;
         });
 
-        axios.get('./satellite.txt')
-            .then(response => {
-                const rawData = response.data;
-                const tleData = rawData.replace(/\r/g, '').split(/\n(?=[^12])/).map(tle => tle.split('\n'));
-                const satData = tleData.map(([name, ...tle]) => ({
-                    satrec: satellite.twoline2satrec(...tle),
-                    name: name.trim().replace(/^0 /, '')
-                }));
+        let satData = [];
+        let globalpath = ''
 
+        function loadSatellites(path) {
+            if(globalpath === path) {
+                return;
+            } else {
+                globalpath = path;
+            }
+            axios.get(path)
+                .then(response => {
+                    const rawData = response.data;
+                    const tleData = rawData.replace(/\r/g, '').split(/\n(?=[^12])/).map(tle => tle.split('\n'));
+                    satData = tleData.map(([name, ...tle]) => {
+                        let country
+
+                        if (name.includes('STARLINK')) 
+                            country = 'USA'
+                        else if (name.includes('COSMOS'))
+                            country = 'Russia'
+                        else 
+                            country = 'Unknown'
+                        return ({
+                        satrec: satellite.twoline2satrec(...tle),
+                        name: name.trim().replace(/^0 /, ''),
+                        country
+                    })}
+                );
+
+                    updateSatellites();
+                })
+                .catch(error => console.error('Error loading satellite data:', error));
+        }
+
+        let intervalId = null;
+        let satellitesMoving = true;
+
+                    
+        function update() {
                 let time = new Date();
-                
-                // Single frame update
-                function updateSatellites() {
-                    time = new Date(+time + TIME_STEP);
-                    timeLogger.innerText = time.toString();
+                time = new Date(+time + TIME_STEP);
+                timeLogger.innerText = time.toString();
 
-                    const gmst = satellite.gstime(time);
-                    satData.forEach(d => {
-                        const eci = satellite.propagate(d.satrec, time);
-                        if (eci.position) {
-                            const gdPos = satellite.eciToGeodetic(eci.position, gmst);
-                            d.lat = satellite.radiansToDegrees(gdPos.latitude);
-                            d.lng = satellite.radiansToDegrees(gdPos.longitude);
-                            d.alt = gdPos.height / EARTH_RADIUS_KM;
+                const gmst = satellite.gstime(time);
+                satData.forEach(d => {
+                    const eci = satellite.propagate(d.satrec, time);
+                    if (eci.position) {
+                        const gdPos = satellite.eciToGeodetic(eci.position, gmst);
+                        d.lat = satellite.radiansToDegrees(gdPos.latitude);
+                        d.lng = satellite.radiansToDegrees(gdPos.longitude);
+                        d.alt = gdPos.height / EARTH_RADIUS_KM;
 
-                            d.position = new THREE.Vector3(
-                                (EARTH_RADIUS_KM + d.alt) * Math.cos(d.lat * Math.PI / 180) * Math.cos(d.lng * Math.PI / 180),
-                                (EARTH_RADIUS_KM + d.alt) * Math.sin(d.lat * Math.PI / 180),
-                                (EARTH_RADIUS_KM + d.alt) * Math.cos(d.lat * Math.PI / 180) * Math.sin(d.lng * Math.PI / 180)
-                            );
-                        }
-                    });
-
-                    Globe.objectsData(satData);
-                }
-
-                // Call updateSatellites every TIME_STEP milliseconds
-                let intervalId = setInterval(updateSatellites, TIME_STEP);
-                
-                // Button to start/stop satellite movement
-                const toggleButton = document.getElementById('toggle-button');
-                let satellitesMoving = true;
-                
-                toggleButton.addEventListener('click', () => {
-                    console.log('Toggling satellites');
-                    satellitesMoving = !satellitesMoving;
-                    if (satellitesMoving) {
-                        intervalId = setInterval(updateSatellites, TIME_STEP);
-                    } else {
-                        clearInterval(intervalId);
+                        d.position = new THREE.Vector3(
+                            (EARTH_RADIUS_KM + d.alt) * Math.cos(d.lat * Math.PI / 180) * Math.cos(d.lng * Math.PI / 180),
+                            (EARTH_RADIUS_KM + d.alt) * Math.sin(d.lat * Math.PI / 180),
+                            (EARTH_RADIUS_KM + d.alt) * Math.cos(d.lat * Math.PI / 180) * Math.sin(d.lng * Math.PI / 180)
+                        );
                     }
                 });
 
-            })
-            .catch(error => console.error('Error loading satellite data:', error));
+                Globe.objectsData(satData);
+            }
+
+        function updateSatellites() {
+            update()
+            if(intervalId) clearInterval(intervalId);
+            intervalId = setInterval(update, TIME_STEP);
+            satellitesMoving = true;
+        }
+
+        const toggleButton = document.getElementById('toggle-button');
+        toggleButton.addEventListener('click', () => {
+                console.log(satellitesMoving, intervalId)
+
+                if (!satellitesMoving && intervalId===null) {
+                    intervalId = setInterval(update, TIME_STEP);
+                    satellitesMoving = true;
+                } else {
+                    clearInterval(intervalId);
+                    intervalId = null;
+                    satellitesMoving = false;
+                }
+
+        });
+
+        loadSatellites('./satellite.txt');
+
+        document.getElementById('toggle-general').addEventListener('click', () => {
+            loadSatellites('./satellite.txt');
+        });
+
+        document.getElementById('toggle-communication').addEventListener('click', () => {
+            loadSatellites('./communication_satellites.txt');
+        });
+
+        document.getElementById('toggle-navigation').addEventListener('click', () => {
+            loadSatellites('./satellite_navigation.txt');
+        });
 
         // Setup renderer
         const renderer = new THREE.WebGLRenderer();
-        renderer.setSize(window.innerWidth - 250, window.innerHeight); // Adjust for side panel width
+        renderer.setSize(window.innerWidth - 300, window.innerHeight); // Adjust for side panel width
         document.getElementById('globeViz').appendChild(renderer.domElement);
 
         // Setup scene
@@ -178,7 +247,7 @@
 
         // Setup camera
         const camera = new THREE.PerspectiveCamera();
-        camera.aspect = (window.innerWidth - 250) / window.innerHeight; // Adjust for side panel width
+        camera.aspect = (window.innerWidth - 300) / window.innerHeight; // Adjust for side panel width
         camera.updateProjectionMatrix();
         camera.position.z = 400;
 
@@ -193,7 +262,7 @@
 
         function onMouseMove(event) {
             // Update the mouse variable
-            mouse.x = ((event.clientX - 250) / (window.innerWidth - 250)) * 2 - 1; // Adjust for side panel width
+            mouse.x = ((event.clientX - 300) / (window.innerWidth - 300)) * 2 - 1; // Adjust for side panel width
             mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
             // Calculate objects intersecting the picking ray
@@ -206,7 +275,7 @@
 
                 if (satData) {
                     tooltip.style.display = 'block';
-                    tooltip.style.left = `${event.clientX/1.5 + 10}px`;
+                    tooltip.style.left = `${event.clientX / 1.5 + 10}px`;
                     tooltip.style.top = `${event.clientY + 10}px`;
                     tooltip.innerHTML = `Satellite: ${satData.name}<br>Latitude: ${satData.lat.toFixed(2)}<br>Longitude: ${satData.lng.toFixed(2)}`;
                 }
@@ -215,7 +284,12 @@
             }
         }
 
+        let lastClicked = 0;
         function onClick(event) {
+            const now = Date.now();
+            if (now - lastClicked < 300) return; // Throttle clicks
+            lastClicked = now;
+
             // Update the mouse variable
             mouse.x = ((event.clientX - 250) / (window.innerWidth - 250)) * 2 - 1; // Adjust for side panel width
             mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
@@ -227,22 +301,22 @@
             if (intersects.length > 0) {
                 const intersectedObject = intersects[0].object;
                 const satData = intersectedObject.userData.satData; // Retrieve satellite data from userData
-
+                console.log(satData);
                 if (satData) {
                     axios.post('http://127.0.0.1:5000', { satellite_name: satData.name }, {
                         headers: { 'Content-Type': 'application/json' }
                     })
                     .then(response => {
                         const data = JSON.parse(response.data);
-                        console.log(data);
-                        console.log(data.origin)
-                        satelliteInfo.innerHTML = `<span class="lead-text">Satellite</span>: ${satData.name}<br><br>
-                        <span class="lead-text">Country of Origin</span>: ${data.origin}<br><br>
-                        <span class="lead-text">Cost</span>: ${data["cost"]}<br><br>
-                        <span class="lead-text">Launch Date</span>: ${data["launch_date"]}<br><br>
-                        <span class="lead-text">Purpose</span>: ${data["purpose"]}<br><br>
-                        <span class="lead-text">History</span>: ${data["history"]}<br><br>
-                        `;
+                        requestAnimationFrame(() => {
+                            satelliteInfo.innerHTML = `<span class="lead-text">Satellite</span>: ${satData.name}<br><br>
+                            <span class="lead-text">Country of Origin</span>: ${data.origin}<br><br>
+                            <span class="lead-text">Cost</span>: ${data["cost"]}<br><br>
+                            <span class="lead-text">Launch Date</span>: ${data["launch_date"]}<br><br>
+                            <span class="lead-text">Purpose</span>: ${data["purpose"]}<br><br>
+                            <span class="lead-text">History</span>: ${data["history"]}<br><br>
+                            `;
+                        });
                     })
                     .catch(error => {
                         console.error('Error:', error);
