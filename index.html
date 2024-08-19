@@ -39,7 +39,7 @@
         .lead-text {
             font-weight: bold;
         }
-        #toggle-button, #toggle-general, #toggle-navigation, #toggle-communication {
+        #toggle-button, #toggle-general, #toggle-navigation, #toggle-communication, #toggle-legend, #reset-button {
             position: absolute;
             padding: 10px;
             background-color: #444;
@@ -63,6 +63,49 @@
         #toggle-communication {
             top: 10px;
             left: 600px;
+        }
+        #toggle-legend {
+            top: 10px;
+            left: 800px;
+        }
+        #legend-dialog {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            width: 20rem;
+            transform: translate(-50%, -50%);
+            background-color: rgb(255, 255, 255);
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            padding: 20px;
+            z-index: 1000;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        #legend-backdrop {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+        .country-color {
+            display: flex;
+            align-items: center;
+        }
+        .color-box {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        #reset-button {
+            top: 50px; /* Adjust the position as needed */
+            left: 10px;
         }
     </style>
 
@@ -95,18 +138,46 @@
             <button id="toggle-general">General Satellites</button>
             <button id="toggle-navigation">Navigation Satellites</button>
             <button id="toggle-communication">Communication Satellites</button>
+            <button id="toggle-legend">Legend</button>
+            <button id="reset-button">Reset View</button> <!-- Reset button -->
         </div>
+    </div>
+
+    <div id="legend-backdrop"></div>
+    <div id="legend-dialog">
+        <h3 style="text-align: center;">Legend</h3>
+        <div class="country-color"><div class="color-box" style="background-color: #ffffff;"></div> United States</div>
+        <div class="country-color"><div class="color-box" style="background-color: #00b4d8;"></div> Russia</div>
+        <div class="country-color"><div class="color-box" style="background-color: #d62828;"></div> China</div>
+        <div class="country-color"><div class="color-box" style="background-color: #fca311;"></div> India</div>
+        <div class="country-color"><div class="color-box" style="background-color: #9467bd;"></div> Japan</div>
+        <div class="country-color"><div class="color-box" style="background-color: #fcca46;"></div> Great Britain</div>
+        <div class="country-color"><div class="color-box" style="background-color: #9a8c98;"></div> South Korea</div>
+        <div class="country-color"><div class="color-box" style="background-color: #d9ed92;"></div> European Union</div>
+        <div class="country-color"><div class="color-box" style="background-color: #fbf8cc;"></div> Finland</div>
+        <div class="country-color"><div class="color-box" style="background-color: #ff758f;"></div> Luxemborg</div>
+        <div class="country-color"><div class="color-box" style="background-color: #84a59d;"></div> Brazil</div>
+        <div class="country-color"><div class="color-box" style="background-color: #606c38;"></div> Italy</div>
+        <div class="country-color"><div class="color-box" style="background-color: #80ed99;"></div> Unknown</div>
+        <button id="close-legend">Close</button> <!-- Close button -->
     </div>
 
     <script type="module">
         import { TrackballControls } from 'three/addons/controls/TrackballControls.js';
 
         const countryColors = {
-            "USA": 0xffffff,
-            "Russia": 0xffd166,
-            "China": 0x2ca02c,
-            "India": 0xd62728,
-            "Japan": 0x9467bd,
+            "US": 0xffffff,
+            "RU": 0x00b4d8,
+            "CN": 0xd62828,
+            "IN": 0xfca311,
+            "JP": 0x9467bd,
+            "GB": 0xfcca46,
+            "KR": 0X9a8c98,
+            "EU": 0xd9ed92,
+            "FI": 0xfbf8cc,
+            "LU": 0xff758f,
+            "BR": 0x84a59d,
+            "ITA": 0x606c38,
             "Unknown": 0x80ed99
             // Add more countries and colors as needed
         };
@@ -128,7 +199,7 @@
         const satGeometry = new THREE.OctahedronGeometry(SAT_SIZE * Globe.getGlobeRadius() / EARTH_RADIUS_KM / 2, 0);
         
         Globe.objectThreeObject((d) => {
-            const color = countryColors[d.country] || 0xffffff;
+            const color = countryColors[d.country] || 0x80ed99;
             const satMaterial = new THREE.MeshLambertMaterial({ color: color, transparent: true, opacity: 1 });
             const satMesh = new THREE.Mesh(satGeometry, satMaterial);
             satMesh.userData = { satData: d }; // Assign satellite data to userData
@@ -136,31 +207,28 @@
         });
 
         let satData = [];
-        let globalpath = ''
+        let globalPath = ''
 
-        function loadSatellites(path) {
-            if(globalpath === path) {
+        async function loadSatellites(path) {
+            if(globalPath === path) {
                 return;
             } else {
-                globalpath = path;
+                globalPath = path;
             }
+
+            const dbResponse = await axios.get('http://127.0.0.1:5000/satellites')
+            console.log(dbResponse.data)
+            const countryData = dbResponse.data;
+            // const country_of_origin
             axios.get(path)
                 .then(response => {
                     const rawData = response.data;
                     const tleData = rawData.replace(/\r/g, '').split(/\n(?=[^12])/).map(tle => tle.split('\n'));
                     satData = tleData.map(([name, ...tle]) => {
-                        let country
-
-                        if (name.includes('STARLINK')) 
-                            country = 'USA'
-                        else if (name.includes('COSMOS'))
-                            country = 'Russia'
-                        else 
-                            country = 'Unknown'
                         return ({
                         satrec: satellite.twoline2satrec(...tle),
                         name: name.trim().replace(/^0 /, ''),
-                        country
+                        country : countryData[name.trim().replace(/^0 /, '')] || 'Unknown'
                     })}
                 );
 
@@ -172,7 +240,6 @@
         let intervalId = null;
         let satellitesMoving = true;
 
-                    
         function update() {
                 let time = new Date();
                 time = new Date(+time + TIME_STEP);
@@ -234,6 +301,7 @@
             loadSatellites('./satellite_navigation.txt');
         });
 
+        
         // Setup renderer
         const renderer = new THREE.WebGLRenderer();
         renderer.setSize(window.innerWidth - 300, window.innerHeight); // Adjust for side panel width
@@ -249,7 +317,7 @@
         const camera = new THREE.PerspectiveCamera();
         camera.aspect = (window.innerWidth - 300) / window.innerHeight; // Adjust for side panel width
         camera.updateProjectionMatrix();
-        camera.position.z = 400;
+        camera.position.z = 350;
 
         // Add camera controls
         const tbControls = new TrackballControls(camera, renderer.domElement);
@@ -259,6 +327,75 @@
         // Raycaster for detecting mouse over and click objects
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
+
+        function resetCamera() {
+            camera.position.set(0, 0, 350); // Adjust as needed for your default view
+            camera.lookAt(0, 0, 0); // Look at the center of the globe
+            camera.updateProjectionMatrix(); // Update the camera projection
+            camera.rotation.set(0, 0, 0); // Reset camera rotation
+            tbControls.reset();
+        }
+
+        function centerOnSatellite(satData) {
+            const { lat, lng, alt } = satData;
+
+            // Convert latitude and longitude to radians
+            const latRad = THREE.MathUtils.degToRad(lat);
+            const lngRad = THREE.MathUtils.degToRad(lng);
+
+            // Get the radius of the globe
+            const radius = Globe.getGlobeRadius(); // Ensure this matches the globe's actual radius
+
+            const scalingfactor = radius / EARTH_RADIUS_KM;
+
+            // Calculate the target position
+            const targetPosition = new THREE.Vector3(
+                EARTH_RADIUS_KM * scalingfactor * Math.cos(latRad) * Math.cos(lngRad),
+                EARTH_RADIUS_KM * scalingfactor * Math.sin(latRad),
+                EARTH_RADIUS_KM * scalingfactor * Math.cos(latRad) * Math.sin(lngRad)
+            );
+
+            // Globe's current forward vector (assuming it faces -Z initially)
+            const currentForward = new THREE.Vector3(0, 0, -1);
+
+            // Calculate the target direction
+            const targetDirection = targetPosition.clone().normalize();
+
+            // Compute the rotation axis and angle
+            const axisOfRotation = new THREE.Vector3().crossVectors(currentForward, targetDirection).normalize();
+            const angleOfRotation = currentForward.angleTo(targetDirection);
+
+            // Create the quaternion for the rotation
+            const rotationQuaternion = new THREE.Quaternion().setFromAxisAngle(axisOfRotation, angleOfRotation);
+
+            // Calculate the target quaternion by applying the rotation
+            const targetQuaternion = rotationQuaternion.multiply(Globe.quaternion);
+
+            // Animation parameters
+            let rotationProgress = 0;
+            const rotationSpeed = 0.5; // Adjust as needed for smoother or faster rotation
+
+            function animate() {
+                rotationProgress += rotationSpeed;
+                Globe.quaternion.slerpQuaternions(Globe.quaternion, targetQuaternion, rotationProgress);
+
+                // Render the scene
+                // renderer.render(scene, camera);
+
+                // Continue animating until the rotation is complete
+                if (rotationProgress < 1) {
+                    requestAnimationFrame(animate);
+                }
+            }
+
+            // Start the animation
+            animate();
+        }
+
+
+
+
+
 
         function onMouseMove(event) {
             // Update the mouse variable
@@ -291,38 +428,49 @@
             lastClicked = now;
 
             // Update the mouse variable
-            mouse.x = ((event.clientX - 250) / (window.innerWidth - 250)) * 2 - 1; // Adjust for side panel width
+            mouse.x = ((event.clientX - 300) / (window.innerWidth - 300)) * 2 - 1; // Adjust for side panel width
             mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
             // Calculate objects intersecting the picking ray
             raycaster.setFromCamera(mouse, camera);
             const intersects = raycaster.intersectObjects(Globe.children);
 
+            console.log(intersects);
+
             if (intersects.length > 0) {
-                const intersectedObject = intersects[0].object;
-                const satData = intersectedObject.userData.satData; // Retrieve satellite data from userData
-                console.log(satData);
-                if (satData) {
-                    axios.post('http://127.0.0.1:5000', { satellite_name: satData.name }, {
-                        headers: { 'Content-Type': 'application/json' }
-                    })
-                    .then(response => {
-                        const data = JSON.parse(response.data);
-                        requestAnimationFrame(() => {
-                            satelliteInfo.innerHTML = `<span class="lead-text">Satellite</span>: ${satData.name}<br><br>
-                            <span class="lead-text">Country of Origin</span>: ${data.origin}<br><br>
-                            <span class="lead-text">Cost</span>: ${data["cost"]}<br><br>
-                            <span class="lead-text">Launch Date</span>: ${data["launch_date"]}<br><br>
-                            <span class="lead-text">Purpose</span>: ${data["purpose"]}<br><br>
-                            <span class="lead-text">History</span>: ${data["history"]}<br><br>
-                            `;
-                        });
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        satelliteInfo.innerHTML = 'Sorry, could not get the satellite info';
+                const selectedSatellite = intersects[0].object;
+                const satData = selectedSatellite.userData.satData;
+                console.log(satData); // Log satellite data for debugging
+
+                console.log(selectedSatellite)
+                if(!satData) return
+
+                console.log(Globe.getGlobeRadius())
+
+                // centerOnSatellite(satData);
+
+                axios.post('http://127.0.0.1:5000', { satellite_name: satData.name }, {
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                .then(response => {
+                    const data = response.data;
+                    requestAnimationFrame(() => {
+                        satelliteInfo.innerHTML = `<span class="lead-text">Satellite</span>: ${satData.name}<br><br>
+                        <span class="lead-text">Country of Origin</span>: ${data.origin}<br><br>
+                        <span class="lead-text">Cost</span>: ${data.cost}<br><br>
+                        <span class="lead-text">Launch Date</span>: ${data.launch_date}<br><br>
+                        <span class="lead-text">Orbit</span>: ${data.orbit}<br><br>
+                        <span class="lead-text">Lifespan</span>: ${data.lifespan}<br><br>
+                        <span class="lead-text">Purpose</span>: ${data.purpose}<br><br>
+                        <span class="lead-text">Status</span>: ${data.status}<br><br>
+                        <span class="lead-text">History</span>: ${data.history}<br><br>
+                        `;
                     });
-                }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    satelliteInfo.innerHTML = 'Sorry, could not get the satellite info';
+                });
             } else {
                 satelliteInfo.innerHTML = 'Click on a satellite to see details here.';
             }
@@ -330,6 +478,32 @@
 
         window.addEventListener('mousemove', onMouseMove, false);
         window.addEventListener('click', onClick, false);
+        document.getElementById('reset-button').addEventListener('click', resetCamera);
+
+
+
+        const legendButton = document.getElementById('toggle-legend');
+        const legendDialog = document.getElementById('legend-dialog');
+        const legendBackdrop = document.getElementById('legend-backdrop');
+        const closeLegendButton = document.getElementById('close-legend');
+
+        // Open legend dialog
+        legendButton.addEventListener('click', () => {
+            legendDialog.style.display = 'block';
+            legendBackdrop.style.display = 'block';
+        });
+
+        // Close legend dialog
+        closeLegendButton.addEventListener('click', () => {
+            legendDialog.style.display = 'none';
+            legendBackdrop.style.display = 'none';
+        });
+
+        // Close legend dialog when clicking on the backdrop
+        legendBackdrop.addEventListener('click', () => {
+            legendDialog.style.display = 'none';
+            legendBackdrop.style.display = 'none';
+        });
 
         // Kick-off renderer
         (function animate() {
