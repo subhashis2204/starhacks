@@ -1,0 +1,6 @@
+Flask
+flask-cors
+langchain
+python-dotenv
+pymongo
+tiktoken
