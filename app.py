@@ -13,16 +13,20 @@ if os.getenv('FLASK_ENV') != 'production':
     from dotenv import load_dotenv
     load_dotenv()
 
-
 # Fetch environment variables
 gpt_key = os.getenv('AZURE_OPENAI_KEY')
 gpt_endpoint = os.getenv('AZURE_OPENAI_ENDPOINT')
 gpt_deployment_name = os.getenv('AZURE_OPENAI_DEPLOYMENT_NAME')
 
-print('gptkey', gpt_key)
+if not gpt_key or not gpt_endpoint or not gpt_deployment_name:
+    raise EnvironmentError("Required GPT environment variables are missing.")
+
+print('gptkey:', gpt_key)
+print('gpt_endpoint:', gpt_endpoint)
+print('gpt_deployment_name:', gpt_deployment_name)
 
 # MongoDB setup
-client = MongoClient('mongodb://localhost:27017')
+client = MongoClient(os.getenv('DB_ENDPOINT', 'mongodb://localhost:27017'))
 db = client['satellite']
 collection = db['data']
 
