@@ -216,7 +216,7 @@
                 globalPath = path;
             }
 
-            const dbResponse = await axios.get('http://127.0.0.1:5000/satellites')
+            const dbResponse = await axios.get('https://satelliteopedia.azurewebsites.net/satellites')
             console.log(dbResponse.data)
             const countryData = dbResponse.data;
             // const country_of_origin
@@ -449,7 +449,7 @@
 
                 // centerOnSatellite(satData);
 
-                axios.post('http://127.0.0.1:5000', { satellite_name: satData.name }, {
+                axios.post('https://satelliteopedia.azurewebsites.net/', { satellite_name: satData.name }, {
                     headers: { 'Content-Type': 'application/json' }
                 })
                 .then(response => {
