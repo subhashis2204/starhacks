@@ -1,6 +1,5 @@
 from flask import Flask, request
 from langchain.chat_models import AzureChatOpenAI
-from dotenv import load_dotenv
 import os
 import json
 import re
@@ -9,15 +8,20 @@ from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 from pymongo import MongoClient
 
+# Determine if the application is running in a development environment
+if os.getenv('FLASK_ENV') != 'production':
+    from dotenv import load_dotenv
+    load_dotenv()
+
+# Fetch environment variables
+gpt_key = os.getenv('AZURE_OPENAI_KEY')
+gpt_endpoint = os.getenv('AZURE_OPENAI_ENDPOINT')
+gpt_deployment_name = os.getenv('AZURE_OPENAI_DEPLOYMENT_NAME')
+
+# MongoDB setup
 client = MongoClient('mongodb://localhost:27017')
 db = client['satellite']
 collection = db['data']
-
-load_dotenv()
-
-gpt_key = os.environ['AZURE_OPENAI_KEY']
-gpt_endpoint = os.environ['AZURE_OPENAI_ENDPOINT']
-gpt_deployment_name = os.environ['AZURE_OPENAI_DEPLOYMENT_NAME']
 
 new_template = '''
 You are a satellite guide aimed to provide info about satellites. 
@@ -61,11 +65,11 @@ def hello_world():
 def homeroute():
     data = request.get_data()  # Get JSON data sent in the request
     text = json.loads(data)['satellite_name']  # Access the 'satellite_name' field
-    query = collection.find_one({"name" : text}, projection={'_id': False})
+    query = collection.find_one({"name": text}, projection={'_id': False})
     country = query['country']
 
     llm_chain = LLMChain(llm=llm, prompt=prompt_template)
-    result  = llm_chain.invoke({"satellite_name": text, "country_origin": country})['text']
+    result = llm_chain.invoke({"satellite_name": text, "country_origin": country})['text']
     print(result)
     json_match = re.search(r'{[^}]*}', result, re.DOTALL)
     json_str = json_match.group()
