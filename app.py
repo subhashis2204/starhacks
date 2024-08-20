@@ -53,6 +53,10 @@ llm = AzureChatOpenAI(
     openai_api_base=gpt_endpoint
 )
 
+@app.route('/hello', methods=['GET'])
+def hello_world():
+    return 'hello world'
+
 @app.route('/', methods=['POST'])
 def homeroute():
     data = request.get_data()  # Get JSON data sent in the request
