@@ -31,7 +31,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Set Flask app entry point
-        run: echo "FLASK_APP=app.py" >> $GITHUB_ENV
+        run: python app.py
         
       # Optional: Add step to run tests here (PyTest, Django test suites, etc.)
 
