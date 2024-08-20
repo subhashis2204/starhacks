@@ -13,6 +13,8 @@ if os.getenv('FLASK_ENV') != 'production':
     from dotenv import load_dotenv
     load_dotenv()
 
+print(os.getenv('app-name'))
+
 # Fetch environment variables
 gpt_key = os.getenv('AZURE_OPENAI_KEY')
 gpt_endpoint = os.getenv('AZURE_OPENAI_ENDPOINT')
