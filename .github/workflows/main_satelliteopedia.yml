@@ -29,9 +29,6 @@ jobs:
       
       - name: Install dependencies
         run: pip install -r requirements.txt
-
-      - name: Set Flask app entry point
-        run: python app.py
         
       # Optional: Add step to run tests here (PyTest, Django test suites, etc.)
 
@@ -83,4 +80,7 @@ jobs:
           AZURE_OPENAI_KEY: ${{ secrets.AZURE_OPENAI_KEY }}
           AZURE_OPENAI_DEPLOYMENT_NAME: ${{ secrets.AZURE_OPENAI_DEPLOYMENT_NAME }}
           DB_ENDPOINT: ${{ secrets.DB_ENDPOINT }}
+      
+      - name: run the app
+        run: python app.py
           
