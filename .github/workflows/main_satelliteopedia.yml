@@ -81,8 +81,7 @@ jobs:
           AZURE_OPENAI_DEPLOYMENT_NAME: ${{ secrets.AZURE_OPENAI_DEPLOYMENT_NAME }}
           DB_ENDPOINT: ${{ secrets.DB_ENDPOINT }}
       
-        - name: run the app
-          run: |
-            source venv/bin/activate
-            python app.py
-          
+      - name: run the app
+        run: |
+          source venv/bin/activate
+          python app.py
