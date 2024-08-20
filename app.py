@@ -13,10 +13,13 @@ if os.getenv('FLASK_ENV') != 'production':
     from dotenv import load_dotenv
     load_dotenv()
 
+
 # Fetch environment variables
 gpt_key = os.getenv('AZURE_OPENAI_KEY')
 gpt_endpoint = os.getenv('AZURE_OPENAI_ENDPOINT')
 gpt_deployment_name = os.getenv('AZURE_OPENAI_DEPLOYMENT_NAME')
+
+print('gptkey', gpt_key)
 
 # MongoDB setup
 client = MongoClient('mongodb://localhost:27017')
