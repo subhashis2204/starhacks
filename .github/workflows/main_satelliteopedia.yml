@@ -65,9 +65,9 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_44D59EAEDD744A04BD7859D32897CB8F }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_35137B8F2C6647B7B2FE96248E7686EC }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_78D2C6B4C6D24AE2BB544EBB3D6C6497 }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_86FB42EB080F4774903D6F68DA54C746 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_A2D397A092B34221BE8F3C8E5F5B2A31 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_8B302E0A1D02482F81DF686799064768 }}
 
       - name: 'Deploy to Azure Web App'
         uses: azure/webapps-deploy@v3
@@ -75,8 +75,4 @@ jobs:
         with:
           app-name: 'satelliteopedia'
           slot-name: 'Production'
-          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
-          AZURE_OPENAI_KEY: ${{ secrets.AZURE_OPENAI_KEY }}
-          AZURE_OPENAI_DEPLOYMENT_NAME: ${{ secrets.AZURE_OPENAI_DEPLOYMENT_NAME }}
-          DB_ENDPOINT: ${{ secrets.DB_ENDPOINT }}
-          FLASK_ENV: 'production'
+          
